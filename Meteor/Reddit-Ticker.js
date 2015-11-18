@@ -1,65 +1,63 @@
+//Alex Karcher
+//Cisco Programming Challenge
+//11.18.15
+
+//Create a new collection to hold posts
 Posts = new Mongo.Collection("posts");
 
+//Pass those posts from the server to the client
 if (Meteor.isServer) {
   Meteor.publish("posts",function() {
     return Posts.find({});
   })
 }
 
+//Client side code
 if (Meteor.isClient) {
   
-  Meteor.subscribe("posts");
+  //After the posts are loaded render the subreddit title
+  Meteor.subscribe("posts", {onReady: function(){
 
-  Session.setDefault('subreddit',"rpi");
-  //Session.set('subreddit', "rpi");
+      //load stats for /r/rpi by default on the first run
+      if(Posts.find({}).count() == 0){
+      console.log("no initial posts");
+      Session.set('subreddit', "rpi");
 
-  var currtime = new Date().getTime() / 1000 - (1 * 365.25 * 24 * 60 * 60);
-  //                                            yrs days     hrs  min  sec
-  var past = currtime - (6 * 365.25 * 24 * 60 * 60);
-  //                     yrs days     hrs  min  sec
-  //console.log(currtime | 0);
-  //console.log(past | 0);
-  Meteor.call('blankPosts');
-
-  var sub = Session.get('subreddit');
-
-  Meteor.call('reddit', sub, past, currtime, function (err, data){
-    
-    //Debug print out the entire object returned from Reddit
-    console.log(data);
-    
-    /*Seriously Reddit? This is what it apparently takes 
-       to get at the post title and upvote count */
-    
-    for (var i in data.data.data.children){
-      console.log({title: data.data.data.children[i].data.title, 
-                   votes: data.data.data.children[i].data.score});
-      var post = data.data.data.children[i].data;
-      console.log(post);
-      Meteor.call('addPost', post);
+      Meteor.call('reddit', "rpi");
+      }
+      else{
+        console.log(Posts.find({}).fetch()[0]);
+        Session.set('subreddit', Posts.find({}).fetch()[0].subreddit);
+      }
     }
-  });  
+  });
+
+//Functions called by spacebars in .html
 Template.body.helpers({
   posts: function(){
     return Posts.find({});
   },
+  loading: function(){
+    return Posts.find({}).count() == 0;
+  },
   sub: function(){
-    return Session.get('subreddit');
+    return Posts.find({}).fetch()[0].subreddit;
   }
 });
+
+//Functions to be called on form completions
 Template.body.events({
     "submit .input-subreddit":function (event) {
       event.preventDefault();
-      //set up the checked property to the opposite of its current value
-      Session.set('subreddit',event.target.subreddit.value);
       
-      var currtime = new Date().getTime() / 1000 - (1 * 365.25 * 24 * 60 * 60);
-      //                                            yrs days     hrs  min  sec
-      var past = currtime - (6 * 365.25 * 24 * 60 * 60);
+      Session.set('subreddit',event.target.subreddit.value);
 
-      Meteor.call("reddit", Session.get('subreddit'), past, currtime, function(err, data){
-        console.log("in callback");
-      });
+      Meteor.call('blankPosts');
+      
+      var sub = Session.get('subreddit');
+
+      Meteor.call('reddit', sub);
+      
       event.target.subreddit.value = "";
 
     }
@@ -67,10 +65,27 @@ Template.body.events({
   });
 }
 
+//Functions ran on both client and server
 Meteor.methods({
-  reddit: function (subreddit, startTime, endTime) {
-    var result = HTTP.call("GET", "http://reddit.com/r/"+subreddit+"/search.json?restrict_sr=true&limit=5&sort=top&q=timestamp:"+(startTime | 0)+".."+(endTime | 0)+"&syntax=cloudsearch");
-    return result;//Meteor.call("addPost", result);
+  reddit: function (subreddit) {
+    if(Meteor.isServer){
+      console.log("searching for posts on /r/"+subreddit);
+      var endTime = new Date().getTime() / 1000 - (1 * 365.25 * 24 * 60 * 60);
+      //                                            yrs days     hrs  min  sec
+      var startTime = endTime - (6 * 365.25 * 24 * 60 * 60);
+      //                     yrs days     hrs  min  sec
+
+      var data = HTTP.call("GET", "http://reddit.com/r/"+subreddit+"/search.json?restrict_sr=true&limit=5&sort=top&q=timestamp:"+(startTime | 0)+".."+(endTime | 0)+"&syntax=cloudsearch");
+
+      for (var i in data.data.data.children){
+              console.log({title: data.data.data.children[i].data.title, 
+                           votes: data.data.data.children[i].data.score});
+              var post = data.data.data.children[i].data;
+              //console.log(post);
+              Meteor.call('addPost', post);
+      }
+    }
+    //return result;//Meteor.call("addPost", result);
 
   },
   addPost: function(data){
@@ -79,7 +94,8 @@ Meteor.methods({
       createdAt: data.created_utc,
       karma: data.score,
       username: data.author,
-      link: data.permalink
+      link: data.permalink,
+      subreddit: data.subreddit
     });
   },
   blankPosts: function(){

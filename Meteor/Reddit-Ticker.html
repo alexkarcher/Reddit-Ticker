@@ -5,23 +5,24 @@
 <body>
   <h1>Remember when this subreddit used to be good?</h1>
   <p>Capitalize on people's nostalgia for their own community and remind them of all the fun they used to have. Enter in a subreddit below and then paste the link along with the quote above for a basically guaranteed boatload of karma. </p>
-
+  {{#if loading}}
+  <p>Loading...</p>
+  {{else}}
   <form class="input-subreddit">
         <input type="text" name="subreddit" placeholder="enter a subreddit">
+        <input type="submit" value="Search">
   </form>
-  <br>
-  <br>
 
-  <h2>{{{sub}}}</h2>
-
-  {{#each posts}}
-  	{{> post}}
-  {{/each}}
+  <p style="font-size:20px"><b>/r/{{{sub}}}</b></p>
+	  {{#each posts}}
+	  	{{> post}}
+	  {{/each}}
+  {{/if}}
 </body>
 
 <template name="post">
-  <br>
-  	<span>{{karma}} - {{title}} - {{username}}</span>
-  <br>
+  
+  	<span>{{karma}} - {{title}}</span>
+  <br><br>
 
 </template>
